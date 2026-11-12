@@ -30,7 +30,7 @@ async def start(event):
     await event.reply(
         "✨ **به ربات ضد حذف پیام خوش آمدید!** ✨\n\n"
         "🔒 **این ربات چه کار می‌کند؟**\n"
-        "اگر مخاطبین شما پیامی بفرستند و سپس آن را برای هر دو طرف پاک کنند، این ربات فوراً متوجه شده و نسخه‌ای از آن پیام را همراه با **نام و آیدی عددی** فرستنده در **Saved Messages** شما ذخیره می‌کند.\n\n"
+        "اگر مخاطبین شما پیامی بفرستند و سپس آن را برای هر دو طرف پاک کنند، این ربات فوراً متوجه شده و نسخه‌ای از آن پیام را همراه با **نام، یوزرنیم و آیدی عددی** فرستنده در **Saved Messages** شما ذخیره می‌کند.\n\n"
         "📱 **برای شروع، لطفاً شماره موبایل خود را با فرمت بین‌المللی ارسال کنید:**\n"
         "مثال: `98912XXXXXXX`\n\n"
         "⚠️ **توجه:** کد تایید را باید سریع (زیر ۱ دقیقه) وارد کنید."
@@ -56,7 +56,7 @@ async def stop(event):
         except:
             pass
             
-    await event.reply("🛑 **ربات متوقف شد.**\nاتصال حساب شما قطع شد و تمامی تنظیمات پاک شد. برای شروع مجدد دستور `/start` را بزنید.")
+    await event.reply("🛑 **ربات متوقف شد.**\nاتصال حساب شما قطع شد. برای شروع مجدد دستور `/start` را بزنید.")
 
 @bot.on(events.NewMessage)
 async def handler(event):
@@ -101,10 +101,10 @@ async def handler(event):
                 'hash': sent.phone_code_hash
             }
             
-            await event.reply("📩 **کد تایید ارسال شد!**\nلطفاً کد ۵ رقمی که به تلگرام شما آمد را همینجا بفرستید:")
+            await event.reply("📩 **کد تایید ارسال شد!**\nلطفاً کد ۵ رقمی را بفرستید:")
             
         except Exception as e:
-            await event.reply(f"❌ **خطا در ارسال کد:**\n`{str(e)}`\n\nلطفاً دوباره تلاش کنید یا /start بزنید.")
+            await event.reply(f"❌ **خطا در ارسال کد:**\n`{str(e)}`")
             if user_id in active_clients:
                 try:
                     await active_clients[user_id].disconnect()
@@ -127,7 +127,7 @@ async def handler(event):
             await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
             
         except PhoneCodeExpiredError:
-            await event.reply("⌛️ **کد منقضی شده است!**\nلطفاً دوباره /start بزنید و کد جدید را سریع‌تر وارد کنید.")
+            await event.reply("⌛️ **کد منقضی شده است!**\nلطفاً دوباره /start بزنید.")
             try:
                 await client.disconnect()
             except:
@@ -138,7 +138,7 @@ async def handler(event):
             
         except SessionPasswordNeededError:
             user_states[user_id] = {'state': 'waiting_2fa'}
-            await event.reply("🔐 **حساب شما دارای رمز دو مرحله‌ای (2FA) است.**\nلطفاً رمز عبور خود را بفرستید:")
+            await event.reply("🔐 **حساب شما رمز دو مرحله‌ای (2FA) دارد.**\nلطفاً رمز خود را بفرستید:")
             return
         except PhoneCodeInvalidError:
             await event.reply("❌ **کد وارد شده نامعتبر است.**\nدوباره تلاش کنید:")
@@ -159,7 +159,7 @@ async def handler(event):
         try:
             await client.sign_in(password=password)
         except Exception as e:
-            await event.reply(f"❌ **رمز اشتباه است یا خطایی رخ داد:**\n`{str(e)}`")
+            await event.reply(f"❌ **رمز اشتباه است:**\n`{str(e)}`")
             return
             
         await _login_success(event, user_id, client)
@@ -176,10 +176,11 @@ async def _login_success(event, user_id, client):
     await event.reply(
         "✅ **اتصال با موفقیت انجام شد!** 🎉\n\n"
         "🛡 از این لحظه به بعد، ربات حساب شما را تحت نظر دارد.\n"
-        "📥 هر پیامی که مخاطبینتان بفرستند و سپس **پاکش کنند**، به صورت خودکار همراه با **نام و آیدی عددی** در **Saved Messages** شما ذخیره خواهد شد.\n\n"
+        "📥 هر پیامی که مخاطبینتان بفرستند و سپس **پاکش کنند**، به صورت خودکار همراه با **نام و آیدی‌ها** در **Saved Messages** شما ذخیره خواهد شد.\n\n"
         "🛑 برای غیرفعال کردن ربات، دستور `/stop` را بفرستید."
     )
     
+    # دیکشنری برای نگه داشتن پیام‌ها و اطلاعات فرستنده قبل از حذف
     recent_messages = {}
 
     @client.on(events.NewMessage(incoming=True))
@@ -187,8 +188,31 @@ async def _login_success(event, user_id, client):
         if not msg_event.is_private:
             return
             
-        recent_messages[msg_event.id] = msg_event.message
+        # استخراج اطلاعات فرستنده همین الان که پیام رسیده (قبل از حذف)
+        sender_id = msg_event.sender_id
+        username = "ندارد"
+        full_name = "ناشناس"
         
+        if msg_event.sender:
+            uname = getattr(msg_event.sender, 'username', None)
+            if uname:
+                username = f"@{uname}"
+                
+            first_name = getattr(msg_event.sender, 'first_name', '') or ''
+            last_name = getattr(msg_event.sender, 'last_name', '') or ''
+            full_name = f"{first_name} {last_name}".strip()
+            if not full_name:
+                full_name = "ناشناس"
+
+        # ذخیره پیام و اطلاعات فرستنده در حافظه
+        recent_messages[msg_event.id] = {
+            'message': msg_event.message,
+            'sender_id': sender_id,
+            'username': username,
+            'full_name': full_name
+        }
+        
+        # جلوگیری از پر شدن حافظه
         if len(recent_messages) > 500:
             oldest_key = next(iter(recent_messages))
             del recent_messages[oldest_key]
@@ -197,28 +221,20 @@ async def _login_success(event, user_id, client):
     async def on_message_deleted(deleted_event):
         for msg_id in deleted_event.deleted_ids:
             if msg_id in recent_messages:
-                deleted_msg = recent_messages[msg_id]
+                cached_data = recent_messages[msg_id]
+                deleted_msg = cached_data['message']
                 
-                # ۱. اول آیدی عددی رو می‌گیریم (چون همیشه همراه پیام هست و خطا نمیده)
-                sender_id = deleted_msg.sender_id
-                sender_name = "ناشناس"
+                sender_id = cached_data['sender_id']
+                username = cached_data['username']
+                full_name = cached_data['full_name']
                 
-                # ۲. حالا سعی می‌کنیم اسم رو بگیریم (اگر خطا داد، اسم همون ناشناس می‌مونه)
-                try:
-                    sender = await deleted_msg.get_sender()
-                    if sender:
-                        sender_name = getattr(sender, 'first_name', 'ناشناس')
-                        if getattr(sender, 'last_name', None):
-                            sender_name += f" {sender.last_name}"
-                except Exception as e:
-                    print(f"Could not get sender name: {e}")
-                    
                 now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # ۳. ساخت قالب زیبا
+                # ساخت قالب با نام، یوزرنیم و آیدی عددی
                 header = (
                     f"🚨 **پیام حذف شده پیدا شد!** 🚨\n\n"
-                    f"👤 **فرستنده:** {sender_name}\n"
+                    f"👤 **فرستنده:** {full_name}\n"
+                    f"🔗 **یوزرنیم:** {username}\n"
                     f"🆔 **آیدی عددی:** `{sender_id}`\n"
                     f"🕒 **زمان حذف:** {now_time}\n"
                     f"➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
@@ -234,12 +250,11 @@ async def _login_success(event, user_id, client):
                     else:
                         await client.send_message('me', final_text)
                         
-                    print(f"Saved deleted message {msg_id} from {sender_id}")
+                    print(f"Saved deleted message {msg_id}")
                 except Exception as e:
-                    print(f"Could not send full format, trying fallback: {e}")
-                    # اگر ارسال کامل خطا داد، حداقل پیام و آیدی رو بفرست
+                    print(f"Could not send full format, fallback: {e}")
                     try:
-                        await client.send_message('me', f"🚨 **پیام حذف شده:**\n🆔 آیدی: `{sender_id}`\n\n{text_content or '📷 مدیا'}")
+                        await client.send_message('me', f"🚨 **پیام حذف شده:**\n👤 {full_name}\n🔗 {username}\n🆔 `{sender_id}`\n\n{text_content or '📷 مدیا'}")
                     except:
                         pass
                 
