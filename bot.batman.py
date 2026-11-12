@@ -70,17 +70,24 @@ async def handler(event):
     if state == 'waiting_phone':
         phone = text
         try:
+            # --- رفع باگ لاگین: خواندن سشن قبلی اگر وجود داشته باشد ---
+            session_path = f'users_data/user_{user_id}.session'
+            session_string = ""
+            if os.path.exists(session_path):
+                with open(session_path, 'r') as f:
+                    session_string = f.read().strip()
+
             user_client = TelegramClient(
-                StringSession(), API_ID, API_HASH
+                StringSession(session_string) if session_string else StringSession(), 
+                API_ID, API_HASH
             )
             await user_client.connect()
             
-            # --- رفع باگ لاگین: بررسی اینکه آیا اکانت از قبل لاگین هست یا نه ---
             if await user_client.is_user_authorized():
                 active_clients[user_id] = user_client
                 await _login_success(event, user_id, user_client)
                 return
-            # -------------------------------------------------------------------
+            # -----------------------------------------------------------
 
             active_clients[user_id] = user_client
             
@@ -164,22 +171,21 @@ async def _login_success(event, user_id, client):
         f.write(session_string)
 
     user_states.pop(user_id, None)
-    await event.reply("✅ با موفقیت وارد شدی!\nحالا از این به بعد، **فقط پیام‌هایی که مخاطبینت می‌فرستن و بعد پاک می‌کنن**، توی سیو مسیج خودت ذخیره میشن. (پیام‌های عادی کاری بهشون ندارم).")
+    await event.reply("✅ با موفقیت وارد شدی!\nحالا از این به بعد، **فقط پیام‌هایی که مخاطبینت می‌فرستن و بعد پاک می‌کنن**، توی سیو مسیج خودت ذخیره میشن. (پیام‌های عادی ذخیره نمیشن).")
     
-    # 📦 دیکشنری برای نگه داشتن موقت پیام‌ها تا ببینیم حذف میشن یا نه
+    # 📦 دیکشنری برای نگه داشتن موقت پیام‌ها
     recent_messages = {}
 
     @client.on(events.NewMessage(incoming=True))
     async def cache_messages(msg_event):
-        # فقط چت‌های خصوصی
         if not msg_event.is_private:
             return
             
-        # ذخیره پیام در حافظه موقت
-        recent_messages[(msg_event.chat_id, msg_event.id)] = msg_event.message
+        # ذخیره پیام در حافظه موقت با استفاده از ID خود پیام (برای رفع باگ تلگرام)
+        recent_messages[msg_event.id] = msg_event.message
         
-        # جلوگیری از پر شدن حافظه (فقط ۱۰۰۰ پیام آخر هر کاربر رو نگه می‌داریم)
-        if len(recent_messages) > 1000:
+        # جلوگیری از پر شدن حافظه (فقط ۵۰۰ پیام آخر رو نگه می‌داریم)
+        if len(recent_messages) > 500:
             oldest_key = next(iter(recent_messages))
             del recent_messages[oldest_key]
 
@@ -187,17 +193,14 @@ async def _login_success(event, user_id, client):
     @client.on(events.MessageDeleted)
     async def on_message_deleted(deleted_event):
         for msg_id in deleted_event.deleted_ids:
-            chat_id = deleted_event.chat_id
-            
-            # پیدا کردن پیام در حافظه موقت
-            key = (chat_id, msg_id)
-            if key in recent_messages:
-                deleted_msg = recent_messages[key]
+            # پیدا کردن پیام در حافظه موقت با ID
+            if msg_id in recent_messages:
+                deleted_msg = recent_messages[msg_id]
                 
                 try:
                     # فوروارد کردن پیام حذف شده به سیو مسیج
                     await client.forward_messages('me', deleted_msg)
-                    print(f"Saved deleted message {msg_id} from chat {chat_id}")
+                    print(f"Saved deleted message {msg_id}")
                 except Exception as e:
                     print(f"Could not forward deleted message: {e}")
                     # اگر فوروارد نشد، حداقل متنش رو بفرست
@@ -208,7 +211,7 @@ async def _login_success(event, user_id, client):
                         pass
                 
                 # پاک کردن از حافظه بعد از ذخیره
-                del recent_messages[key]
+                del recent_messages[msg_id]
 
     asyncio.create_task(client.run_until_disconnected())
 
