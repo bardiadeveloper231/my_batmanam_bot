@@ -1,46 +1,21 @@
 from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, PhoneCodeExpiredError
 from telethon.sessions import StringSession, MemorySession
-from telethon.network import ConnectionTcpMTProxyRandomizedIntermediate
 import asyncio
 import os
 
-# مقادیر مثال خودت به عنوان پیش‌فرض (Default) اینجا قرار گرفته‌اند
-# بعداً وقتی توکن واقعی گرفتی، فقط همین رشته‌های داخل دابل کوتیشن رو عوض کن
+# خواندن مقادیر از متغیرهای محیطی Railway
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9024595880:AAHT2b4wpWNu-gULwbrBj09AjNUDWZQUoLE")
 API_ID = int(os.getenv("API_ID", 2040))
 API_HASH = os.getenv("API_HASH", "b18441a1ff607e10a989891a5462e627")
 
-PROXIES = [
-    ('new.nakoskoskesh.co.uk', 8080, '104462821249bd7ac519130220c25d09'),
-    ('shsh.anotelinopalk.co.uk', 8880, '79e344818749bd7ac519130220c25d09'),
-    ('dokhtar.nanaz.co.uk', 8443, '104462821249bd7ac519130220c25d09'),
-    ('irogallery.golgoli1.co.uk', 2096, '79e344818749bd7ac519130220c25d09')
-]
-
-bot = None
-active_proxy = None
-
-for proxy in PROXIES:
-    try:
-        print(f"Trying proxy: {proxy[0]}:{proxy[1]}")
-        # استفاده از MemorySession برای ربات اصلی تا روی سرور فایل اضافی ساخته نشه
-        test_bot = TelegramClient(
-            MemorySession(), API_ID, API_HASH,
-            connection=ConnectionTcpMTProxyRandomizedIntermediate,
-            proxy=proxy
-        )
-        test_bot.start(bot_token=BOT_TOKEN)
-        bot = test_bot
-        active_proxy = proxy
-        print(f"Connected using proxy: {proxy[0]}")
-        break
-    except Exception as e:
-        print(f"Failed with proxy {proxy[0]}: {e}")
-
-if not bot:
-    print("Could not connect with any proxy. Exiting.")
-    exit(1)
+# --- اتصال مستقیم به تلگرام (بدون پروکسی) ---
+print("Connecting directly to Telegram...")
+bot = TelegramClient(
+    MemorySession(), API_ID, API_HASH
+)
+bot.start(bot_token=BOT_TOKEN)
+print("Bot Connected Directly and Started!")
 
 if not os.path.exists('users_data'):
     os.makedirs('users_data')
@@ -96,10 +71,9 @@ async def handler(event):
     if state == 'waiting_phone':
         phone = text
         try:
+            # اتصال کاربر بدون پروکسی
             user_client = TelegramClient(
-                StringSession(), API_ID, API_HASH,
-                connection=ConnectionTcpMTProxyRandomizedIntermediate,
-                proxy=active_proxy
+                StringSession(), API_ID, API_HASH
             )
             await user_client.connect()
             active_clients[user_id] = user_client
@@ -205,5 +179,4 @@ async def _login_success(event, user_id, client):
 
     asyncio.create_task(client.run_until_disconnected())
 
-print("Bot Started!")
 bot.run_until_disconnected()
