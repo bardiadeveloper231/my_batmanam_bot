@@ -1,0 +1,4 @@
+users_data/
+*.session
+*.session-journal
+pycache/
