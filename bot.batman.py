@@ -199,44 +199,47 @@ async def _login_success(event, user_id, client):
             if msg_id in recent_messages:
                 deleted_msg = recent_messages[msg_id]
                 
+                # ۱. اول آیدی عددی رو می‌گیریم (چون همیشه همراه پیام هست و خطا نمیده)
+                sender_id = deleted_msg.sender_id
+                sender_name = "ناشناس"
+                
+                # ۲. حالا سعی می‌کنیم اسم رو بگیریم (اگر خطا داد، اسم همون ناشناس می‌مونه)
                 try:
-                    # استخراج نام و آیدی فرستنده
                     sender = await deleted_msg.get_sender()
-                    sender_name = getattr(sender, 'first_name', 'ناشناس')
-                    if getattr(sender, 'last_name', None):
-                        sender_name += f" {sender.last_name}"
+                    if sender:
+                        sender_name = getattr(sender, 'first_name', 'ناشناس')
+                        if getattr(sender, 'last_name', None):
+                            sender_name += f" {sender.last_name}"
+                except Exception as e:
+                    print(f"Could not get sender name: {e}")
                     
-                    # اینجا آیدی عددی رو استخراج می‌کنیم
-                    sender_id = deleted_msg.sender_id
-                    
-                    # زمان حذف پیام
-                    now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    # ساخت قالب زیبا همراه با آیدی عددی
-                    header = (
-                        f"🚨 **پیام حذف شده پیدا شد!** 🚨\n\n"
-                        f"👤 **فرستنده:** {sender_name}\n"
-                        f"🆔 **آیدی عددی:** `{sender_id}`\n"
-                        f"🕒 **زمان حذف:** {now_time}\n"
-                        f"➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
-                    )
-                    
-                    text_content = deleted_msg.text or ""
-                    final_text = header + text_content if text_content else header + "📷 **[عکس / ویدیو / فایل]**"
-                    
+                now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                # ۳. ساخت قالب زیبا
+                header = (
+                    f"🚨 **پیام حذف شده پیدا شد!** 🚨\n\n"
+                    f"👤 **فرستنده:** {sender_name}\n"
+                    f"🆔 **آیدی عددی:** `{sender_id}`\n"
+                    f"🕒 **زمان حذف:** {now_time}\n"
+                    f"➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
+                )
+                
+                text_content = deleted_msg.text or ""
+                final_text = header + text_content if text_content else header + "📷 **[عکس / ویدیو / فایل]**"
+                
+                try:
                     # ارسال بدون برچسب فوروارد (سین)
                     if deleted_msg.media:
                         await client.send_message('me', final_text, file=deleted_msg.media)
                     else:
                         await client.send_message('me', final_text)
                         
-                    print(f"Saved deleted message {msg_id}")
+                    print(f"Saved deleted message {msg_id} from {sender_id}")
                 except Exception as e:
-                    print(f"Could not send deleted message: {e}")
-                    # اگر خطا داد، حداقل آیدی و متن رو بفرست
+                    print(f"Could not send full format, trying fallback: {e}")
+                    # اگر ارسال کامل خطا داد، حداقل پیام و آیدی رو بفرست
                     try:
-                        sender_id = deleted_msg.sender_id
-                        await client.send_message('me', f"🚨 **پیام حذف شده:**\n🆔 آیدی: `{sender_id}`\n\n{deleted_msg.text or '📷 مدیا'}")
+                        await client.send_message('me', f"🚨 **پیام حذف شده:**\n🆔 آیدی: `{sender_id}`\n\n{text_content or '📷 مدیا'}")
                     except:
                         pass
                 
