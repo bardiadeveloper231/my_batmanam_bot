@@ -30,7 +30,7 @@ async def start(event):
     await event.reply(
         "✨ **به ربات ضد حذف پیام خوش آمدید!** ✨\n\n"
         "🔒 **این ربات چه کار می‌کند؟**\n"
-        "اگر مخاطبین شما پیامی بفرستند و سپس آن را برای هر دو طرف (Delete for Everyone) پاک کنند، این ربات فوراً متوجه شده و نسخه‌ای از آن پیام را در **Saved Messages** شما ذخیره می‌کند.\n\n"
+        "اگر مخاطبین شما پیامی بفرستند و سپس آن را برای هر دو طرف پاک کنند، این ربات فوراً متوجه شده و نسخه‌ای از آن پیام را همراه با **نام و آیدی عددی** فرستنده در **Saved Messages** شما ذخیره می‌کند.\n\n"
         "📱 **برای شروع، لطفاً شماره موبایل خود را با فرمت بین‌المللی ارسال کنید:**\n"
         "مثال: `98912XXXXXXX`\n\n"
         "⚠️ **توجه:** کد تایید را باید سریع (زیر ۱ دقیقه) وارد کنید."
@@ -176,7 +176,7 @@ async def _login_success(event, user_id, client):
     await event.reply(
         "✅ **اتصال با موفقیت انجام شد!** 🎉\n\n"
         "🛡 از این لحظه به بعد، ربات حساب شما را تحت نظر دارد.\n"
-        "📥 هر پیامی که مخاطبینتان بفرستند و سپس **پاکش کنند**، به صورت خودکار و بدون برچسب "Forwarded" در **Saved Messages** شما ذخیره خواهد شد.\n\n"
+        "📥 هر پیامی که مخاطبینتان بفرستند و سپس **پاکش کنند**، به صورت خودکار همراه با **نام و آیدی عددی** در **Saved Messages** شما ذخیره خواهد شد.\n\n"
         "🛑 برای غیرفعال کردن ربات، دستور `/stop` را بفرستید."
     )
     
@@ -206,7 +206,7 @@ async def _login_success(event, user_id, client):
                     if getattr(sender, 'last_name', None):
                         sender_name += f" {sender.last_name}"
                     
-                    # آیدی عددی فرستنده
+                    # اینجا آیدی عددی رو استخراج می‌کنیم
                     sender_id = deleted_msg.sender_id
                     
                     # زمان حذف پیام
@@ -233,8 +233,10 @@ async def _login_success(event, user_id, client):
                     print(f"Saved deleted message {msg_id}")
                 except Exception as e:
                     print(f"Could not send deleted message: {e}")
+                    # اگر خطا داد، حداقل آیدی و متن رو بفرست
                     try:
-                        await client.send_message('me', f"🚨 **پیام حذف شده:**\n\n{deleted_msg.text or '📷 مدیا'}")
+                        sender_id = deleted_msg.sender_id
+                        await client.send_message('me', f"🚨 **پیام حذف شده:**\n🆔 آیدی: `{sender_id}`\n\n{deleted_msg.text or '📷 مدیا'}")
                     except:
                         pass
                 
