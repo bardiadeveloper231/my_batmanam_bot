@@ -200,19 +200,23 @@ async def _login_success(event, user_id, client):
                 deleted_msg = recent_messages[msg_id]
                 
                 try:
-                    # استخراج نام فرستنده
+                    # استخراج نام و آیدی فرستنده
                     sender = await deleted_msg.get_sender()
                     sender_name = getattr(sender, 'first_name', 'ناشناس')
                     if getattr(sender, 'last_name', None):
                         sender_name += f" {sender.last_name}"
                     
+                    # آیدی عددی فرستنده
+                    sender_id = deleted_msg.sender_id
+                    
                     # زمان حذف پیام
                     now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
-                    # ساخت قالب زیبا
+                    # ساخت قالب زیبا همراه با آیدی عددی
                     header = (
                         f"🚨 **پیام حذف شده پیدا شد!** 🚨\n\n"
                         f"👤 **فرستنده:** {sender_name}\n"
+                        f"🆔 **آیدی عددی:** `{sender_id}`\n"
                         f"🕒 **زمان حذف:** {now_time}\n"
                         f"➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
                     )
